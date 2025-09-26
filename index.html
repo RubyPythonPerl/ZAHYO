@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>太陽の方位角・高度計算</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    input { margin: 5px 0; width: 250px; 
+    }
+    table { 
+      border-collapse: collapse; 
+      /* margin-top: 20px;  */
+      /* width: 100%;  */
+      max-width: 800px; 
+      border: none;
+    }
+    th, td { border: 1px solid #999; padding: 5px 10px; text-align: left; border: none;}
+    th { background: #eee; }
+    button { margin-right: 10px; }
+    .align-right {
+        /* パートと名前の部分の表で必要 */
+      text-align: right;
+      padding-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>太陽の方位角・高度 計算ツール (JST)</h2>
+
+  <table>
+        <tbody><tr>
+  <td class="align-right"><label>ラベル</td><td><input type="text" id="label" placeholder="任意のラベル"></label></td>
+          </tr>
+        <tr>
+  <td class="align-right"><label>日付 (MMDD)</td><td><input type="text" id="date" placeholder="0924"></label></td>
+          </tr>
+        <tr>
+  <td class="align-right"><label>時刻 (HHMM)</td><td><input type="text" id="time" placeholder="1430"></label></td>
+          </tr>
+        <tr>
+  <td class="align-right"><label>GoogleマップURL</td><td><input type="text" id="gmap" placeholder="https://www.google.com/maps/..."></label></td>
+  </tr>
+  </tbody></table>
+
+  <button onclick="calculate()">計算して追加</button>
+  <button onclick="downloadCSV()">CSV出力</button>
+  
+  <h3>計算結果一覧</h3>
+  <table id="resultTable">
+    <thead>
+      <tr>
+        <th>ラベル</th>
+        <th>日時(JST)</th>
+        <th>緯度</th>
+        <th>経度</th>
+        <th>方位角(°)</th>
+        <th>高度(°)</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    let results = [];
+
+    // --- 太陽位置計算関数 (簡易アルゴリズム, JST対応) ---
+    function getSunPosition(date, lat, lon) {
+      const rad = Math.PI / 180;
+      const dayMs = 1000 * 60 * 60 * 24;
+      const J1970 = 2440588;
+      const J2000 = 2451545;
+      const toJulian = date => date / dayMs - 0.5 + J1970;
+      const toDays = date => toJulian(date) - J2000;
+      const d = toDays(date);
+
+      const e = rad * 23.4397; // 黄道傾斜角
+      const M = rad * (357.5291 + 0.98560028 * d);
+      const C = rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2*M) + 0.0003 * Math.sin(3*M));
+      const P = rad * 102.9372;
+      const L = M + C + P + Math.PI;
+      const dec = Math.asin(Math.sin(L) * Math.sin(e));
+      const RA = Math.atan2(Math.sin(L) * Math.cos(e), Math.cos(L));
+      const lw = rad * -lon;
+      const phi = rad * lat;
+      const Jtransit = J2000 + d + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2*L);
+      const n = Math.round(d - lw / (2 * Math.PI));
+      const Jnoon = J2000 + n - lw / (2 * Math.PI);
+      const H = ((date / 1000 / 60 / 60) % 24) * 15 * rad + lw - RA;
+      const az = Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(phi) - Math.tan(dec) * Math.cos(phi));
+      const alt = Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H));
+      return {
+        azimuth: (az * 180 / Math.PI + 360) % 360,
+        altitude: alt * 180 / Math.PI
+      };
+    }
+
+    function parseCoords(url) {
+      let match = url.match(/@([-0-9.]+),([-0-9.]+)/);
+      if (match) return { lat: parseFloat(match[1]), lon: parseFloat(match[2]) };
+      match = url.match(/[?&]ll=([-0-9.]+),([-0-9.]+)/);
+      if (match) return { lat: parseFloat(match[1]), lon: parseFloat(match[2]) };
+      return null;
+    }
+
+    function calculate() {
+      const label = document.getElementById("label").value || "未設定";
+      const dateInput = document.getElementById("date").value;
+      const timeInput = document.getElementById("time").value;
+      const url = document.getElementById("gmap").value;
+
+      if (!dateInput.match(/^[0-9]{4}$/) || !timeInput.match(/^[0-9]{4}$/)) {
+        alert("日付はMMDD, 時刻はHHMMで入力してください");
+        return;
+      }
+      const coords = parseCoords(url);
+      if (!coords) {
+        alert("GoogleマップURLから座標を抽出できません");
+        return;
+      }
+
+      const year = new Date().getFullYear();
+      const month = parseInt(dateInput.slice(0,2)) - 1;
+      const day = parseInt(dateInput.slice(2,4));
+      const hour = parseInt(timeInput.slice(0,2));
+      const min = parseInt(timeInput.slice(2,4));
+
+      const date = new Date(year, month, day, hour, min);
+      const sun = getSunPosition(date.getTime(), coords.lat, coords.lon);
+
+      results.push({
+        label, datetime: date.toLocaleString("ja-JP"),
+        lat: coords.lat, lon: coords.lon,
+        azimuth: sun.azimuth.toFixed(2),
+        altitude: sun.altitude.toFixed(2)
+      });
+
+      const tbody = document.getElementById("resultTable").querySelector("tbody");
+      const row = tbody.insertRow();
+      row.insertCell().textContent = label;
+      row.insertCell().textContent = date.toLocaleString("ja-JP");
+      row.insertCell().textContent = coords.lat.toFixed(6);
+      row.insertCell().textContent = coords.lon.toFixed(6);
+      row.insertCell().textContent = sun.azimuth.toFixed(2);
+      row.insertCell().textContent = sun.altitude.toFixed(2);
+    }
+
+    function downloadCSV() {
+      if (results.length === 0) {
+        alert("データがありません");
+        return;
+      }
+      let csv = "ラベル,日時,緯度,経度,方位角(°),高度(°)\n";
+      results.forEach(r => {
+        csv += `${r.label},${r.datetime},${r.lat},${r.lon},${r.azimuth},${r.altitude}\n`;
+      });
+      const now = new Date();
+      const timestamp = now.getFullYear() +
+                        ("0" + (now.getMonth()+1)).slice(-2) +
+                        ("0" + now.getDate()).slice(-2) + "_" +
+                        ("0" + now.getHours()).slice(-2) +
+                        ("0" + now.getMinutes()).slice(-2) +
+                        ("0" + now.getSeconds()).slice(-2);
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `sun_position_${timestamp}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
