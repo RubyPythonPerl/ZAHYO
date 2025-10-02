@@ -3,178 +3,238 @@
 <head>
   <meta charset="UTF-8">
   <title>太陽の方位角・高度計算</title>
-  <style>
-    body { font-family: sans-serif; margin: 20px; }
-    input { margin: 5px 0; width: 250px; 
-    }
-    table { 
-      border-collapse: collapse; 
-      /* margin-top: 20px;  */
-      /* width: 100%;  */
-      max-width: 800px; 
-      border: none;
-    }
-    th, td { border: 1px solid #999; padding: 5px 10px; text-align: left; border: none;}
-    th { background: #eee; }
-    button { margin-right: 10px; }
-    .align-right {
-        /* パートと名前の部分の表で必要 */
-      text-align: right;
-      padding-right: 10px;
-    }
-  </style>
-</head>
-<body>
-  <h2>太陽の方位角・高度 計算ツール (JST)</h2>
+<style>
+  body {
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    margin: 40px;
+    background: #f9fafc;
+    color: #333;
+  }
 
+  h2 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #444;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px 30px;
+    max-width: 400px;
+    margin: 0 auto 30px auto;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  td {
+    padding: 10px;
+  }
+
+  input {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    transition: border-color 0.2s;
+  }
+
+  input:focus {
+    border-color: #0078d7;
+    outline: none;
+  }
+
+  .btn-group {
+    text-align: center;
+    margin-top: 20px;
+  }
+
+  button {
+    background: #0078d7;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 18px;
+    margin: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  button:hover {
+    background: #005a9e;
+    transform: translateY(-2px);
+  }
+
+  h3 {
+    margin-top: 40px;
+    text-align: center;
+    color: #555;
+  }
+
+  #resultTable {
+    margin: 20px auto;
+    max-width: 600px;
+    background: #fff;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+  }
+
+  #resultTable th {
+    background: #0078d7;
+    color: white;
+    padding: 10px;
+    text-align: center;
+  }
+
+  #resultTable td {
+    padding: 10px;
+    text-align: center;
+    border-bottom: 1px solid #eee;
+  }
+
+  #resultTable tr:nth-child(even) {
+    background: #f9f9f9;
+  }
+
+  #resultTable tr:hover {
+    background: #e6f0fa;
+  }
+</style>
+
+</head>
+
+<body>
+<h2>太陽位置計算（日本時間 JST）</h2>
+<div class="card">
   <table>
         <tbody><tr>
   <td class="align-right"><label>ラベル</td><td><input type="text" id="label" placeholder="任意のラベル"></label></td>
           </tr>
         <tr>
-  <td class="align-right"><label>日付 (MMDD)</td><td><input type="text" id="date" placeholder="0924"></label></td>
+  <td class="align-right"><label>日付 (MMDD)</td><td><input type="text" id="md" placeholder="0924"></label></td>
           </tr>
         <tr>
   <td class="align-right"><label>時刻 (HHMM)</td><td><input type="text" id="time" placeholder="1430"></label></td>
           </tr>
         <tr>
-  <td class="align-right"><label>GoogleマップURL</td><td><input type="text" id="gmap" placeholder="https://www.google.com/maps/..."></label></td>
+  <td class="align-right"><label>GoogleマップURL</td><td><input type="text" id="mapLink" placeholder="https://www.google.com/maps/..."></label></td>
   </tr>
   </tbody></table>
+<div class="btn-group">
+<button onclick="calculate()">計算</button>
+<button onclick="downloadCSV()">CSVダウンロード</button>
+</div>
+</div>
 
-  <button onclick="calculate()">計算して追加</button>
-  <button onclick="downloadCSV()">CSV出力</button>
-  
-  <h3>計算結果一覧</h3>
-  <table id="resultTable">
-    <thead>
-      <tr>
-        <th>ラベル</th>
-        <th>日時(JST)</th>
-        <th>緯度</th>
-        <th>経度</th>
-        <th>方位角(°)</th>
-        <th>高度(°)</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+<h3>計算結果一覧</h3>
+<table id="resultTable">
+<thead>
+  <tr>
+    <th>ラベル</th><th>日付</th><th>時刻</th><th>緯度</th><th>経度</th><th>方位角</th><th>仰角</th><th>日の出</th><th>日没</th>
+  </tr>
+  </thead>
+</table>
 
-  <script>
-    let results = [];
+<script>
+// 太陽位置計算アルゴリズム
+function solarPosition(lat, lon, date) {
+  const rad = Math.PI / 180, deg = 180 / Math.PI;
+  const n = Math.floor((Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(date.getFullYear(), 0, 0)) / 86400000);
+  const B = 2 * Math.PI * (n - 81) / 364;
+  const EoT = 9.87 * Math.sin(2*B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+  const decl = 23.45 * rad * Math.sin(2 * Math.PI * (284 + n) / 365);
+  const timeOffset = EoT + 4*lon - 60*9;
+  const tst = date.getUTCHours()*60 + date.getUTCMinutes() + date.getUTCSeconds()/60 + timeOffset;
+  const ha = (tst/4 - 180) * rad;
+  const latRad = lat * rad;
+  const elev = Math.asin(Math.sin(latRad)*Math.sin(decl) + Math.cos(latRad)*Math.cos(decl)*Math.cos(ha));
+  const az = Math.acos((Math.sin(decl)-Math.sin(elev)*Math.sin(latRad))/(Math.cos(elev)*Math.cos(latRad)));
+  const azimuth = (ha > 0 ? 2*Math.PI - az : az) * deg;
+  return { elev: elev*deg, azimuth };
+}
 
-    function getSunPosition(date, lat, lon) {
-      const rad = Math.PI / 180;
-      const dayMs = 1000 * 60 * 60 * 24;
-      const J1970 = 2440588;
-      const J2000 = 2451545;
-      const toJulian = date => date / dayMs - 0.5 + J1970;
-      const toDays = date => toJulian(date) - J2000;
-      const d = toDays(date);
+// 日の出・日没計算
+function sunRiseSet(lat, lon, date) {
+  const rad = Math.PI / 180, deg = 180 / Math.PI;
+  const n = Math.floor((Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(date.getFullYear(), 0, 0)) / 86400000);
+  const B = 2 * Math.PI * (n - 81) / 364;
+  const EoT = 9.87 * Math.sin(2*B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+  const decl = 23.45 * rad * Math.sin(2 * Math.PI * (284 + n) / 365);
+  const latRad = lat * rad;
+  const ha = Math.acos(-Math.tan(latRad) * Math.tan(decl)); // 時角
+  const sunriseMin = 720 - 4*(lon*deg + ha*deg) - EoT + 9*60;
+  const sunsetMin  = 720 - 4*(lon*deg - ha*deg) - EoT + 9*60;
+  function toHM(mins) {
+    let h = Math.floor(mins/60) % 24;
+    let m = Math.floor(mins % 60);
+    return (h<10?"0":"")+h+":"+(m<10?"0":"")+m;
+  }
+  return { sunrise: toHM(sunriseMin), sunset: toHM(sunsetMin) };
+}
 
-      const e = rad * 23.4397;
-      const M = rad * (357.5291 + 0.98560028 * d);
-      const C = rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2*M) + 0.0003 * Math.sin(3*M));
-      const P = rad * 102.9372;
-      const L = M + C + P + Math.PI;
-      const dec = Math.asin(Math.sin(L) * Math.sin(e));
-      const RA = Math.atan2(Math.sin(L) * Math.cos(e), Math.cos(L));
-      const lw = rad * -lon;
-      const phi = rad * lat;
-      const H = ((date / 1000 / 60 / 60) % 24) * 15 * rad + lw - RA;
-      const az = Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(phi) - Math.tan(dec) * Math.cos(phi));
-      const alt = Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H));
-      return {
-        azimuth: (az * 180 / Math.PI + 360) % 360,
-        altitude: alt * 180 / Math.PI
-      };
+// リンクから緯度経度を抽出
+function parseLatLon(link) {
+  const match = link.match(/@([-0-9.]+),([-0-9.]+)/);
+  if (match) return [parseFloat(match[1]), parseFloat(match[2])];
+  return [null, null];
+}
+
+function calculate() {
+  const link = document.getElementById("mapLink").value;
+  const md = document.getElementById("md").value;
+  const time = document.getElementById("time").value;
+  const label = document.getElementById("label").value || "";
+  const [lat, lon] = parseLatLon(link);
+  if (lat === null || lon === null || md.length !== 4 || time.length !== 4) {
+    alert("入力を確認してください");
+    return;
+  }
+  const month = parseInt(md.slice(0,2));
+  const day = parseInt(md.slice(2,4));
+  const hour = parseInt(time.slice(0,2));
+  const minute = parseInt(time.slice(2,4));
+  const date = new Date(Date.UTC(new Date().getFullYear(), month-1, day, hour-9, minute)); // JST→UTC
+  const pos = solarPosition(lat, lon, date);
+  const rs = sunRiseSet(lat, lon, date);
+  const table = document.getElementById("resultTable");
+  const row = table.insertRow(-1);
+  row.insertCell().textContent = label;
+  row.insertCell().textContent = `${month}/${day}`;
+  row.insertCell().textContent = `${hour}:${minute.toString().padStart(2,"0")}`;
+  row.insertCell().textContent = Math.round(lat);
+  row.insertCell().textContent = Math.round(lon);
+  row.insertCell().textContent = Math.round(pos.azimuth);
+  row.insertCell().textContent = Math.round(pos.elev);
+  row.insertCell().textContent = rs.sunrise;
+  row.insertCell().textContent = rs.sunset;
+}
+
+function downloadCSV() {
+  const table = document.getElementById("resultTable");
+  let csv = "";
+  for (let i=0; i<table.rows.length; i++) {
+    let row = [];
+    for (let j=0; j<table.rows[i].cells.length; j++) {
+      row.push(table.rows[i].cells[j].textContent);
     }
-
-    function parseCoords(url) {
-      let match = url.match(/@([-0-9.]+),([-0-9.]+)/);
-      if (match) return { lat: parseFloat(match[1]), lon: parseFloat(match[2]) };
-      match = url.match(/[?&]ll=([-0-9.]+),([-0-9.]+)/);
-      if (match) return { lat: parseFloat(match[1]), lon: parseFloat(match[2]) };
-      return null;
-    }
-
-    function formatDateNoYear(date) {
-      const mm = ("0" + (date.getMonth()+1)).slice(-2);
-      const dd = ("0" + date.getDate()).slice(-2);
-      const hh = ("0" + date.getHours()).slice(-2);
-      const min = ("0" + date.getMinutes()).slice(-2);
-      return `${mm}/${dd} ${hh}:${min}`;
-    }
-
-    function calculate() {
-      const label = document.getElementById("label").value || "未設定";
-      const dateInput = document.getElementById("date").value;
-      const timeInput = document.getElementById("time").value;
-      const url = document.getElementById("gmap").value;
-
-      if (!dateInput.match(/^[0-9]{4}$/) || !timeInput.match(/^[0-9]{4}$/)) {
-        alert("日付はMMDD, 時刻はHHMMで入力してください");
-        return;
-      }
-      const coords = parseCoords(url);
-      if (!coords) {
-        alert("GoogleマップURLから座標を抽出できません");
-        return;
-      }
-
-      const year = new Date().getFullYear();
-      const month = parseInt(dateInput.slice(0,2)) - 1;
-      const day = parseInt(dateInput.slice(2,4));
-      const hour = parseInt(timeInput.slice(0,2));
-      const min = parseInt(timeInput.slice(2,4));
-
-      const date = new Date(year, month, day, hour, min);
-      const sun = getSunPosition(date.getTime(), coords.lat, coords.lon);
-
-      const result = {
-        label,
-        datetime: formatDateNoYear(date),
-        lat: Math.round(coords.lat),
-        lon: Math.round(coords.lon),
-        azimuth: Math.round(sun.azimuth),
-        altitude: Math.round(sun.altitude)
-      };
-      results.push(result);
-
-      const tbody = document.getElementById("resultTable").querySelector("tbody");
-      const row = tbody.insertRow();
-      row.insertCell().textContent = result.label;
-      row.insertCell().textContent = result.datetime;
-      row.insertCell().textContent = result.lat;
-      row.insertCell().textContent = result.lon;
-      row.insertCell().textContent = result.azimuth;
-      row.insertCell().textContent = result.altitude;
-    }
-
-    function downloadCSV() {
-      if (results.length === 0) {
-        alert("データがありません");
-        return;
-      }
-      let csv = "ラベル,日時,緯度,経度,方位角(°),高度(°)\n";
-      results.forEach(r => {
-        csv += `${r.label},${r.datetime},${r.lat},${r.lon},${r.azimuth},${r.altitude}\n`;
-      });
-      const now = new Date();
-      const timestamp = now.getFullYear() +
-                        ("0" + (now.getMonth()+1)).slice(-2) +
-                        ("0" + now.getDate()).slice(-2) + "_" +
-                        ("0" + now.getHours()).slice(-2) +
-                        ("0" + now.getMinutes()).slice(-2) +
-                        ("0" + now.getSeconds()).slice(-2);
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `sun_position_${timestamp}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-  </script>
+    csv += row.join(",") + "\n";
+  }
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,"0")}${now.getDate().toString().padStart(2,"0")}_${now.getHours().toString().padStart(2,"0")}${now.getMinutes().toString().padStart(2,"0")}`;
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `sunpos_${timestamp}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
 </body>
 </html>
